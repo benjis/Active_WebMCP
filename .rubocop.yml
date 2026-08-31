@@ -1,0 +1,58 @@
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - ".ruby-lsp/**/*"
+    - "tmp/**/*"
+    - "test/dummy/db/schema.rb"
+
+Layout/LineLength:
+  Max: 120
+  Exclude:
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/BlockLength:
+  Exclude:
+    - "active_webmcp.gemspec"
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/AbcSize:
+  Exclude:
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/ClassLength:
+  Exclude:
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/MethodLength:
+  Max: 15
+  Exclude:
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - "bin/**/*"
+    - "spec/**/*"
+    - "test/**/*"
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes

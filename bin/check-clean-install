@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "open3"
+require "tmpdir"
+require "fileutils"
+require "digest"
+
+root = File.expand_path("..", __dir__)
+FileUtils.mkdir_p(File.join(root, "tmp"))
+destination = Dir.mktmpdir("source-install-", File.join(root, "tmp"))
+rails = Gem.bin_path("railties", "rails", "8.1.3.1")
+template = File.join(root, "test/support/clean_app_template.rb")
+check = File.join(root, "test/support/clean_app_check.rb")
+run = lambda do |*command, directory:|
+  output, status = Open3.capture2e(*command, chdir: directory)
+  abort output unless status.success?
+end
+
+puts "Retaining clean-app evidence at #{destination}"
+run.call(RbConfig.ruby, rails, "new", destination, "--no-rc", "--skip-bundle", "--skip-git",
+         "--skip-active-record", "--skip-action-cable", "--skip-action-mailer", "--skip-action-mailbox",
+         "--skip-active-storage", "--skip-action-text", "--skip-test", "--skip-system-test", "--skip-jbuilder",
+         "--skip-bootsnap", "--skip-solid", "--skip-kamal", "--skip-docker", "--skip-ci", "--skip-brakeman",
+         "--skip-rubocop", "--javascript=importmap", "--asset-pipeline=propshaft", "--template=#{template}", directory: root)
+Bundler.with_unbundled_env do
+  run.call("bundle", "install", directory: destination)
+  # --skip-bundle skips Rails' normal after_bundle asset installers as well.
+  run.call("bundle", "exec", "ruby", "bin/rails", "importmap:install", "turbo:install", "stimulus:install",
+           directory: destination)
+  run.call("bundle", "exec", "ruby", "bin/rails", "generate", "active_webmcp:install", directory: destination)
+  files = %w[config/importmap.rb app/javascript/application.js].map { |path| File.join(destination, path) }
+  before = files.map { |path| Digest::SHA256.file(path).hexdigest }
+  run.call("bundle", "exec", "ruby", "bin/rails", "generate", "active_webmcp:install", directory: destination)
+  abort "Installer changed the second run" unless before == files.map { |path| Digest::SHA256.file(path).hexdigest }
+  run.call("bundle", "exec", "ruby", "bin/rails", "runner", check, directory: destination)
+end
+puts "PASS: clean Rails app, installer twice (identical hashes), metadata, gem assets, JSON search, CSRF/authorized POST and application idempotency."
+puts "Path dependency only; run bin/check-package to verify a built artifact."

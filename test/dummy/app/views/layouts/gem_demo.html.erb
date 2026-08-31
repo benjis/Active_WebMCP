@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>ActiveWebMCP generated tools</title>
+    <link rel="icon" href="data:,">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <body>
+    <h1>ActiveWebMCP — generated search</h1>
+    <nav aria-label="Fixture lifecycle navigation">
+      <%= link_to "Turbo search", gem_demo_path %>
+      <%= link_to "Turbo write", gem_write_path %>
+      <%= link_to "Turbo empty", "/gem/empty" %>
+      <%= link_to "Document empty", "/gem/empty", data: { turbo: false } %>
+    </nav>
+    <%= yield %>
+  </body>
+</html>

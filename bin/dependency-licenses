@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "json"
+require "digest"
+
+project = Gem.loaded_specs.fetch("active_webmcp")
+inventory = {}
+walk = lambda do |spec|
+  spec.runtime_dependencies.each do |dependency|
+    child = Gem.loaded_specs.fetch(dependency.name)
+    next if inventory.key?(child.name)
+
+    documents = Dir.glob(File.join(child.full_gem_path, "**/{*LICENSE*,*COPYING*,*NOTICE*}"))
+                   .select { |path| File.file?(path) }.uniq.sort.map do |path|
+      { file: path.delete_prefix("#{child.full_gem_path}/"), sha256: Digest::SHA256.file(path).hexdigest }
+    end
+    inventory[child.name] = { version: child.version.to_s, platform: child.platform.to_s,
+                              declared_licenses: child.licenses, license_documents: documents }
+    walk.call(child)
+  end
+end
+walk.call(project)
+puts JSON.pretty_generate({ project: project.name, version: project.version.to_s,
+                            license: project.licenses, scope: "resolved transitive runtime gem dependencies; not a legal opinion",
+                            dependencies: inventory.sort.to_h })

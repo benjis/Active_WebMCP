@@ -1,0 +1,11 @@
+.DS_Store
+.bundle/
+vendor/
+tmp/
+log/
+test/dummy/log/
+test/dummy/tmp/
+test/dummy/storage/*.sqlite3*
+test/dummy/public/assets/
+*.gem
+docs/

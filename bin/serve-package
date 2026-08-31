@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "json"
+require "digest"
+require "optparse"
+
+options = { port: 3001, daemon: false }
+parser = OptionParser.new do |args|
+  args.banner = "Usage: bundle exec ruby bin/serve-package PACKAGE_WORKSPACE [--port 3001] [--daemon]"
+  args.on("--port PORT", Integer) { |port| options[:port] = port }
+  args.on("--daemon") { options[:daemon] = true }
+end
+parser.parse!
+abort parser.to_s unless ARGV.size == 1 && options[:port].between?(1024, 65_535)
+workspace = File.realpath(ARGV.first)
+evidence = JSON.parse(File.read(File.join(workspace, "evidence.json")))
+abort "Package-native verification has not passed" unless evidence["native_check"] == "passed"
+artifact, application, gem_home = %w[artifact application gem_home].map do |key|
+  path = File.realpath(evidence.fetch(key))
+  abort "Evidence path is outside this workspace" unless path.start_with?("#{workspace}/")
+  path
+end
+unless Digest::SHA256.file(artifact).hexdigest == evidence.fetch("sha256")
+  abort "Artifact checksum differs from the tested package"
+end
+environment = {
+  "GEM_HOME" => gem_home, "GEM_PATH" => evidence.fetch("gem_path"),
+  "BUNDLE_GEMFILE" => File.join(application, "Gemfile"), "BUNDLE_IGNORE_CONFIG" => "1",
+  "BUNDLE_PATH" => nil, "BUNDLE_WITHOUT" => nil, "BUNDLE_WITH" => nil,
+  "BUNDLE_APP_CONFIG" => nil, "BUNDLE_DEPLOYMENT" => nil, "BUNDLE_FROZEN" => nil,
+  "RAILS_ENV" => "production", "RAILS_LOG_LEVEL" => "warn", "SECRET_KEY_BASE_DUMMY" => "1"
+}
+puts "Serving tested #{evidence.fetch('version')} at http://127.0.0.1:#{options[:port]}"
+puts "Local synthetic fixture only; do not bind publicly or use real credentials."
+command = ["bundle", "exec", "ruby", "bin/rails", "server", "--binding", "127.0.0.1", "--port", options[:port].to_s]
+command << "--daemon" if options[:daemon]
+$stdout.flush
+Bundler.with_unbundled_env { Dir.chdir(application) { exec(environment, *command) } }

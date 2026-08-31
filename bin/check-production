@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "tmpdir"
+require "fileutils"
+require "open3"
+
+root = File.expand_path("..", __dir__)
+destination = Dir.mktmpdir("production-check-", File.join(root, "tmp"))
+# Copy only fixture source. Never copy logs, sessions, databases or browser profiles.
+%w[app config db bin Rakefile config.ru].each do |path|
+  FileUtils.cp_r(File.join(root, "test/dummy", path), File.join(destination, path))
+end
+environment = { "RAILS_ENV" => "production", "BUNDLE_GEMFILE" => File.join(root, "Gemfile") }
+puts "Retaining isolated production evidence at #{destination}"
+commands = [
+  [RbConfig.ruby, "bin/rails", "db:prepare", "assets:precompile"],
+  [RbConfig.ruby, File.join(root, "test/support/production_check.rb"), destination]
+]
+commands.each do |command|
+  output, status = Open3.capture2e(environment, *command, chdir: destination)
+  puts output
+  abort "Production verification failed" unless status.success?
+end
+puts "PASS: eager-loaded production fixture, precompiled Propshaft/importmap, strict CSP, native GET/POST and human workflows."
+puts "Local path gem only; run bin/check-package to verify a built artifact."

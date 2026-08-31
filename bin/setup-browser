@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "digest"
+require "fileutils"
+require "net/http"
+
+VERSION = "153.0.8010.12"
+PLATFORM = "mac-arm64"
+DOWNLOADS = {
+  "chrome" => "930e2a2c15addbaca1fe9b07bfa520667bced556d7988707186819cb4279ef3b",
+  "chromedriver" => "fe2a4644020a93e79614d547074932b9eb0c00ed34b9fec0e1d87e2ee6d24886"
+}.freeze
+
+abort "The pinned browser setup supports Apple Silicon macOS only" unless RUBY_PLATFORM.include?("arm64-darwin")
+
+root = File.expand_path("..", __dir__)
+destination = File.join(root, "tmp/browser")
+FileUtils.mkdir_p(destination)
+
+DOWNLOADS.each do |name, expected_sha256|
+  archive = File.join(destination, "#{name}.zip")
+  url = "https://storage.googleapis.com/chrome-for-testing-public/#{VERSION}/#{PLATFORM}/#{name}-#{PLATFORM}.zip"
+  File.binwrite(archive, Net::HTTP.get(URI(url))) unless File.file?(archive)
+  abort "Checksum mismatch for #{name}" unless Digest::SHA256.file(archive).hexdigest == expected_sha256
+
+  abort "Could not extract #{name}" unless system("unzip", "-q", "-o", archive, "-d", destination)
+end
+
+puts "Chrome for Testing and ChromeDriver #{VERSION} are ready in #{destination}"

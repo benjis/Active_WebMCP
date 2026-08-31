@@ -1,0 +1,17 @@
+<h2>Generated search and favourite</h2>
+<p>Local synthetic fixture only. Not a production login.</p>
+<%= webmcp_tools "search_hotels" %>
+<%= webmcp_tools "add_favourite", controller: FavouritesController %>
+<p id="identity"><%= session[:user_id] || "Not logged in" %></p>
+<p id="tenant"><%= session[:tenant_id] || "north" %></p>
+<%= button_to "Sign in as fixture Alice", fixture_login_path,
+      params: { return_to: "gem_write" }, data: { turbo: false } %>
+<%= button_to "Sign in as fixture Bob", fixture_login_path,
+      params: { identity: "bob", return_to: "gem_write" }, data: { turbo: false } %>
+<%= button_to "Sign in as fixture Alice south", fixture_login_path,
+      params: { tenant: "south", return_to: "gem_write" }, data: { turbo: false } %>
+<%= button_to "Favourite Harbour Hotel", favourites_path,
+      params: { hotel_id: 1, return_to: "gem_write" }, data: { turbo: false } %>
+<p id="favourites">Favourite hotel IDs: <%= @favourites.join(", ") %></p>
+<p>Tool results do not update this page. Reload to see a saved favourite.</p>
+<%= link_to "Search-only page", gem_demo_path, data: { turbo: false } %>

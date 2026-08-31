@@ -1,0 +1,5 @@
+<h2>Search results</h2>
+<% @hotels.each do |hotel| %>
+  <p><%= hotel[:name] %></p>
+<% end %>
+<%= link_to "Back", root_path %>

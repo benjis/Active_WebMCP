@@ -1,0 +1,90 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "rubygems/package"
+require "open3"
+require "tmpdir"
+require "fileutils"
+require "digest"
+require "json"
+
+root = File.expand_path("..", __dir__)
+FileUtils.mkdir_p(File.join(root, "tmp"))
+destination = Dir.mktmpdir("package-check-", File.join(root, "tmp"))
+spec = Gem::Specification.load(File.join(root, "active_webmcp.gemspec"))
+spec.files.each do |path|
+  absolute = File.join(root, path)
+  raise "Refusing packaged symlink: #{path}" if File.symlink?(absolute)
+  if File.binread(absolute).match?(/AIza[0-9A-Za-z_-]{35}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/)
+    raise "Credential-like content in packaged file: #{path}"
+  end
+end
+artifact = File.join(destination, "#{spec.full_name}.gem")
+Dir.chdir(root) { Gem::Package.build(spec, false, false, artifact) }
+package = Gem::Package.new(artifact)
+package.verify
+raise "Unexpected packaged files" unless package.contents.sort == spec.files.sort
+raise "Fixture or local files in package" if package.contents.any? do |path|
+  path.match?(%r{\A(?:test|tmp|bin|config|\.internal_docs)/})
+end
+
+puts "Package workspace: #{destination}"
+puts "Artifact SHA256: #{Digest::SHA256.file(artifact).hexdigest}"
+
+gem_home = File.join(destination, "gems")
+application = File.join(destination, "package_demo")
+environment = {
+  "GEM_HOME" => gem_home, "GEM_PATH" => ([gem_home] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+  "BUNDLE_GEMFILE" => File.join(application, "Gemfile"), "BUNDLE_IGNORE_CONFIG" => "1",
+  "BUNDLE_PATH" => nil, "BUNDLE_WITHOUT" => nil, "BUNDLE_WITH" => nil,
+  "BUNDLE_APP_CONFIG" => nil, "BUNDLE_DEPLOYMENT" => nil, "BUNDLE_FROZEN" => nil,
+  "ACTIVE_WEBMCP_PACKAGE_VERSION" => spec.version.to_s, "ACTIVE_WEBMCP_PACKAGE_HOME" => gem_home,
+  "RAILS_ENV" => "production", "RAILS_LOG_LEVEL" => "warn", "SECRET_KEY_BASE_DUMMY" => "1"
+}
+run = lambda do |*command, directory: application, env: environment|
+  output, status = Open3.capture2e(env, *command, chdir: directory)
+  puts output if !status.success? || command.include?(File.join(root, "test/support/package_check.rb"))
+  raise "Package check command failed: #{command.first(3).join(' ')}" unless status.success?
+
+  output
+end
+Bundler.with_unbundled_env do
+  gem_command = File.join(RbConfig::CONFIG.fetch("bindir"), "gem")
+  run.call(RbConfig.ruby, gem_command, "install", artifact, "--local", "--ignore-dependencies", "--no-document",
+           "--install-dir", gem_home, directory: destination)
+  rails = Gem.bin_path("railties", "rails", "8.1.3.1")
+  run.call(RbConfig.ruby, rails, "new", application, "--no-rc", "--skip-bundle", "--skip-git",
+           "--skip-action-cable", "--skip-action-mailer", "--skip-action-mailbox", "--skip-active-storage",
+           "--skip-action-text", "--skip-test", "--skip-system-test", "--skip-jbuilder", "--skip-bootsnap",
+           "--skip-solid", "--skip-kamal", "--skip-docker", "--skip-ci", "--skip-brakeman", "--skip-rubocop",
+           "--javascript=importmap", "--asset-pipeline=propshaft", "--database=sqlite3",
+           "--template=#{File.join(root, 'test/support/package_app_template.rb')}", directory: destination,
+                                                                                    env: environment.merge("BUNDLE_GEMFILE" => nil, "RAILS_ENV" => "development"))
+  run.call("bundle", "install", "--local")
+  run.call("bundle", "exec", "ruby", "bin/rails", "importmap:install", "turbo:install", "stimulus:install")
+  run.call("bundle", "exec", "ruby", "bin/rails", "generate", "active_webmcp:install")
+  installed_files = %w[config/importmap.rb app/javascript/application.js].map { |path| File.join(application, path) }
+  hashes = installed_files.map { |path| Digest::SHA256.file(path).hexdigest }
+  run.call("bundle", "exec", "ruby", "bin/rails", "generate", "active_webmcp:install")
+  unless hashes == installed_files.map { |path| Digest::SHA256.file(path).hexdigest }
+    raise "Installer is not idempotent"
+  end
+  raise "Path source in clean app lockfile" if File.read(File.join(application, "Gemfile.lock")).match?(/^PATH$/)
+
+  run.call("bundle", "exec", "ruby", "bin/rails", "db:prepare", "assets:precompile")
+  inventory = run.call("bundle", "exec", "ruby", File.join(root, "bin/dependency-licenses"))
+  File.write(File.join(destination, "dependency-licenses.json"), inventory)
+  output = run.call("bundle", "exec", "ruby", File.join(root, "test/support/package_check.rb"), application)
+  File.write(File.join(destination, "native-results.txt"), output)
+end
+evidence = JSON.pretty_generate({
+                                  version: spec.version.to_s, artifact: artifact, sha256: Digest::SHA256.file(artifact).hexdigest,
+                                  packaged_files: package.contents.sort, application: application, gem_home: gem_home,
+                                  gem_path: environment.fetch("GEM_PATH"),
+                                  installer_idempotent: true, native_check: "passed", inspector_agent_check: "deferred to user testing",
+                                  license: spec.licenses, publication: "not authorized or attempted"
+                                })
+File.write(File.join(destination, "evidence.json"), "#{evidence}\n")
+puts "PASS: packaged gem installed in a private gem home; fresh Rails app and native checks passed."
+puts "MIT license approved. Package verification does not publish; publishing remains a separate explicit step."

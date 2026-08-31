@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+root = File.expand_path("..", __dir__)
+native = ARGV.delete("--native")
+pattern = native ? "spec/**/*browser_spec.rb" : "spec/**/*_spec.rb"
+files = Dir[File.join(root, pattern)]
+files.reject! { |path| path.include?("browser_spec.rb") } unless native
+exec({ "BUNDLE_GEMFILE" => File.join(root, "Gemfile") }, "bundle", "exec", "rspec", *files.sort, *ARGV)

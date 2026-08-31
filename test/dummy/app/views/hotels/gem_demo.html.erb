@@ -1,0 +1,7 @@
+<p>This page uses the gem, not handwritten WebMCP registration. Only search is exposed.</p>
+<%= webmcp_tools "search_hotels" %>
+<%= form_with url: search_hotels_path, method: :get, data: { turbo: false } do |form| %>
+  <%= form.label :destination %>
+  <%= form.text_field :destination, value: "Sydney" %>
+  <%= form.submit "Search hotels" %>
+<% end %>
