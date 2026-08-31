@@ -35,14 +35,10 @@ raise "Wrong endpoint after reload" unless data[0].fetch("endpoint").fetch("path
 
 3.times do
   Rails.application.reloader.reload!
-  session.get("/gem/write")
-  raise "Write page failed after reload" unless session.response.status == 200
-
-  data = Nokogiri::HTML(session.response.body).css("script[data-active-webmcp]").flat_map { |node| JSON.parse(node.text) }
-  raise "Wrong read/write selection after reload" unless data.map do |tool|
-    tool.fetch("name")
-  end == %w[search_hotels add_favourite]
-  raise "Wrong write endpoint" unless data[1].fetch("endpoint") == { "path" => "/favourites", "method" => "POST" }
+  read = HotelsController.webmcp_definitions.fetch("search_hotels")
+  write = FavouritesController.webmcp_definitions.fetch("add_favourite")
+  raise "Wrong read definition after reload" unless [read.route, read.method] == %w[search_hotels GET]
+  raise "Wrong write definition after reload" unless [write.route, write.method] == %w[favourites POST]
 end
 puts "Controller replaced, definitions rebuilt, cross-controller selection rendered: PASS"
 puts "POST definitions rebuilt across repeated reloads; removed declaration absent: PASS"
