@@ -6,6 +6,7 @@ AllCops:
     - ".ruby-lsp/**/*"
     - "tmp/**/*"
     - "test/dummy/db/schema.rb"
+    - "vendor/**/*"
 
 Layout/LineLength:
   Max: 120
